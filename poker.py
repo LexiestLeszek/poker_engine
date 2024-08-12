@@ -1,106 +1,210 @@
-class Card:
-    RANKS = (None, '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King', 'Ace')
-    SUITS = {'d': 'Diamonds', 'c': 'Clubs', 's': 'Spades', 'h': 'Hearts'}
+import random
+class Card():
+    def __init__(self, val, suit):
+        self.val = val
+        self.suit = suit
 
-    def __init__(self, rank, suit):
-        self.rank = self.RANKS[rank]
-        self.value = rank
-        self.suit = self.SUITS[suit]
+    def show(self):
+        print("{} of {}".format(self.val, self.suit))
 
-    def __str__(self):
-        return f"{self.rank} of {self.suit}"
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}({self.value!r}, '{self.suit.lower()[0]}')"
-
-    def __eq__(self, other):
-        return self.value == other.value
-
-    def __gt__(self, other):
-        return self.value > other.value
-
-    def __hash__(self):
-        return hash((self.suit, self.value))
-
-class Deck(list):
-    def __init__(self, card_class=Card):
-        super().__init__([card_class(v, s) for v in range(1, 14) for s in 'dcsh'])
-        self.shuffle()
-
+class Deck():
+    def __init__(self):
+        self.deck = []
+        self.build()
+        
+    def build(self):
+        for suits in ["Clubs","Spades","Hearts","Diamonds"]:
+            for val in range(2, 15):
+                if val == 14:
+                    val = "Ace"
+                if val == 11:
+                    val = "Jack"
+                if val == 12:
+                    val = "Queen"
+                if val == 13:
+                    val = "King"
+                self.deck.append(Card(val,suits))
+        
+    def printdeck(self):
+        for c in self.deck:
+            c.show()
+            
+    def drawcard(self):
+        return self.deck.pop()
+    
     def shuffle(self):
-        import random
-        random.shuffle(self)
-        return self
+        for i in range(len(self.deck)-1, 0 ,-1):
+            r = random.randint(0, i)
+            self.deck[i], self.deck[r] = self.deck[r], self.deck[i]
 
-    def draw(self, n):
-        return [self.pop(0) for _ in range(n)]
+class player():
+    def __init__(self, name):
+        self.hand = []
+        self.name = name
+        self.moneyAMT = 100
+        self.isDealer = False
+        self.didFold = False
+        self.botfoldState = ["[][]","folded"]
+    def draw(self, deck):
+        self.hand.append(deck.drawcard())
+        
+    def showHand(self):
+        for c in self.hand:
+            c.show()
+            
+class gamehandler():
+    foldedbots = 0
+    progress = False
+    flops = 3
+    won = False
+    raiseAMT = 0
+    pot = 0
+    betting = False
+    def __init__(self, playerlist):
+        self.playerlist = playerlist
+        self.amtCardsDrawn = 2
+        self.flopturnriver = []
+        for i in range(len(self.playerlist)):
+            if self.playerlist[i].name == "Ki":
+                self.userPlayer = self.playerlist[i]
 
-class Hand(list):
-    def __init__(self, deck):
-        self.deck = deck
-        super().__init__(deck.draw(5))
-        self.sort()
+    def deal(self, deck):
+        for _ in range(self.amtCardsDrawn):
+            for players in range(len(self.playerlist)):
+                self.playerlist[players].draw(deck)
+        for _ in range(5):
+            self.flopturnriver.append(deck.drawcard())
 
-    def discard(self, indexes):
-        self.deck.extend([self.pop(i) for i in indexes])
-        return self
+    def showAll(self):#shows everyones hand
+        for players in range(len(self.playerlist)):
+            print("\n{} cards are:".format(self.playerlist[players].name))
+            self.playerlist[players].showHand()
+        print("\nFLOP:")
+        for i in range(len(self.flopturnriver)):
+            self.flopturnriver[i].show()
+        
+    def playHand(self):
+        while self.flops <= 6:
+            self.botBet()
+            for players in self.playerlist:
+                print("\n{} cards:".format(players.name))
+                print("MONEY:{}".format(players.moneyAMT))
+                if players.name == "Ki":
+                    players.showHand()
+                elif players.didFold == True:
+                    print(players.botfoldState[1])
+                else:
+                    print(players.botfoldState[0])        
+            if self.progress == True:
+                print("\nFLOP:")
+                for i in range(self.flops):
+                    self.flopturnriver[i].show()
+            print("\nPOT:"+str(self.pot))
+#             self.botBet()
+            self.betting = False
+            userInput = input("\n(1)Check/Call\n(2)Fold\n(3)Raise\n: ")
+            actions = {
+                "1": self.checkCall,
+                "2": self.fold,
+                "3": self.Raise
+                }
+            if userInput not in actions.keys():
+                self.playHand()
+            actions[userInput]()
+        
+    def checkCall(self):
+        print("\n" * 50)
+        if self.progress == True:
+            if self.flops == 5:
+                self.flops +=1
+                self.nextHand()
+            else:
+                self.flops +=1 
+        self.progress = True
+        
+    def fold(self):
+        print("\n" * 50)
+        self.flops = 6
+        self.showAll()
+        
+    def Raise(self):
+        self.raiseInput = int(input("\nEnter bet: "))
+        if self.raiseInput > self.userPlayer.moneyAMT:
+            print("Insufficient Funds")
+            self.Raise()
+        else:
+            self.checkCall()
+            self.userPlayer.moneyAMT -= self.raiseInput
+            self.pot += self.raiseInput
+            self.betting = True
+        
+    def botBet(self):
+        if self.betting:
+            for player in self.playerlist:
+                if player.name != "Ki":
+                    if player.didFold == False:
+                        r = bool(random.getrandbits(1))
+                        if r:
+                            if player.moneyAMT >= self.raiseInput:
+                                player.moneyAMT -= self.raiseInput
+                                self.pot += self.raiseInput
+                            elif player.moneyAMT != 0:
+                                remainder = self.raiseInput - player.moneyAMT
+                                player.moneyAMT -= remainder
+                                self.pot += remainder
+                        else:
+                            self.botFold(player)
+                            self.foldedbots += 1 
+            self.raiseInput = 0
+            self.checkbotFold()
 
-    @property
-    def score(self):
-        vals = [x.value for x in self]
-        s = set(vals)
-        counts = sorted(zip(map(vals.count, s), s))
-        pairs = [self[n:n+2] for n in range(0, len(self)-1)]
-
-        def score_tree(root):
-            return tuple([root] + [counts[-x][1] for x in range(1, len(counts)+1)])
-
-        if counts == [(1,1), (1,2), (1,3), (1,4), (1,14)]:
-            if all(c.suit == self[0].suit for c in self[1:]):
-                return score_tree(8)  # straight flush
-            return score_tree(4)  # straight
-
-        if all(c2.value == c1.value+1 for c1, c2 in pairs):
-            if all(c.suit == self[0].suit for c in self[1:]):
-                return score_tree(8)  # straight flush
-        if counts[-1][0] == 4:
-            return score_tree(7)  # four of a kind
-        if counts[-1][0] == 3:
-            if counts[0][0] == 2:
-                return score_tree(6)  # full house
-        if all(c.suit == self[0].suit for c in self[1:]):
-            return score_tree(5)  # flush
-        if all(c2.value == c1.value+1 for c1, c2 in pairs):
-            return score_tree(4)  # straight
-        if counts[-1][0] == 3:
-            return score_tree(3)  # three of a kind
-        if counts[1][0] == 2:
-            return score_tree(2)  # two pair
-        if counts[-1][0] == 2:
-            return score_tree(1)  # one pair
-        return score_tree(0)  # high card
-
-    def __eq__(self, other):
-        return self.score == other.score
-
-    def __gt__(self, other):
-        return self.score > other.score
-
-if __name__ == '__main__':
-    deck = Deck()
-
-    # Prompt the user for the number of hands they want to play
-    num_hands = int(input("Enter the number of hands you want to play: "))
+    def botFold(self, botthatfolded):
+        botthatfolded.didFold = True
+        # pass #Continue later
+    def checkbotFold(self):
+        if self.foldedbots == 2:
+            print("Every bot folded")
+            self.betting = False
+            self.flops = 6
+            for players in self.playerlist:
+                if players.name == "Ki":
+                    players.moneyAMT += self.pot
+                    self.foldedbots = 0
+                    self.pot = 0
+                    self.nextHand()        
     
-    # Create the specified number of hands
-    hands = [Hand(deck) for _ in range(num_hands)]
-    
-    # Print details of each hand and its score
-    for i, hand in enumerate(hands, start=1):
-        print(f"Hand {i}: {[f'{card}' for card in hand]} Score: {hand.score}")
-    
-    # Determine and print the winning hand
-    import operator
-    winner = max(hands, key=lambda hand: hand.score)
-    print(f"\nWinner: {[f'{card}' for card in winner]} Score: {winner.score}")
+    def botRaise(self):
+        pass
+        #TODO
+        #make abstraction to randomize bot raise frequency
+    def nextHand(self):
+        self.progress = False
+        self.flops = 3
+        self.flopturnriver = []
+        for players in self.playerlist:
+            if players.moneyAMT != 0:
+                players.didFold = False
+            players.hand = []
+            if self.pot != 0:                    #DELETE THIS
+                if players.name == "Ki":         #COME UP WITH CALC FOR WINNER
+                    players.moneyAMT += self.pot #THIS IS JUST HERE BECAUSE ITS NOT
+                    self.pot = 0                 #MADE YET
+        deck = Deck()
+        deck.shuffle()
+        poker_player.deal(deck)
+        poker_player.playHand()
+        
 
+deck = Deck()
+deck.shuffle()
+# maincharacter = input("Enter your name")
+ply1 = player("Jack")
+ply2 = player("Ben")
+ply3 = player("Marhan") #User Player
+
+players = [ply1,ply2,ply3] #player list 
+
+poker_player = gamehandler(players)
+poker_player.deal(deck)
+# poker_player.showAll() // Shows everybodys hand
+poker_player.playHand()
